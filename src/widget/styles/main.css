@@ -209,11 +209,16 @@
     color: #dc2626;
   }
 
-  /* MyMarg keeps its mobile tab bar at the bottom of the viewport. Keep the
-     feedback launcher above it, while preserving the configured desktop spot. */
+  /* MyMarg keeps its tab bar and action buttons at the bottom of the viewport
+     on phones. Park the feedback launcher on the right edge, at ~40% of the
+     viewport height, so it never covers them. Desktop keeps the configured
+     corner. Tweak `top` to move it up/down. */
   @media (max-width: 900px) {
     .bugpin-launcher-bottom {
-      bottom: calc(94px + env(safe-area-inset-bottom, 0px)) !important;
+      top: 40% !important;
+      bottom: auto !important;
+      left: auto !important;
+      right: calc(8px + env(safe-area-inset-right, 0px)) !important;
     }
   }
 }

@@ -52,7 +52,7 @@ WORKDIR /app
 
 # Pull latest Alpine security patches (libssl3, libcrypto3, musl, zlib, etc.)
 # and install tini for signal handling and wget for health checks.
-RUN apk update && apk upgrade --no-cache && apk add --no-cache tini wget
+RUN apk update && apk upgrade --no-cache && apk add --no-cache tini wget su-exec
 
 # Copy the workspace manifests and lockfile before installing server dependencies
 COPY package.json bun.lock ./
@@ -92,14 +92,14 @@ ENV HOST=0.0.0.0
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://localhost:7300/health || exit 1
 
-# Switch to non-root user
-USER bun
+# The entrypoint fixes /data ownership and then drops to the unprivileged bun user
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Expose port
 EXPOSE 7300
 
 # Use tini as init system for proper signal handling
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 # Start server
 CMD ["bun", "run", "src/server/index.ts"]

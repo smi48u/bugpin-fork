@@ -1,6 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { FormData } from '../components/WidgetDialog.js';
 import { CapturedMedia } from '../components/ScreenshotManager.js';
+import type { SelectedElement } from '../capture/element-selection.js';
 
 const DB_NAME = 'bugpin-drafts';
 const DB_VERSION = 1;
@@ -21,6 +22,7 @@ interface DraftMediaDB extends DBSchema {
 interface DraftFormData {
   formData: FormData;
   activeTab: string;
+  selectedElement?: SelectedElement | null;
   savedAt: string;
 }
 
@@ -57,11 +59,12 @@ function getFormDraftKey(apiKey: string): string {
 /**
  * Save form data to localStorage
  */
-function saveFormDraft(apiKey: string, formData: FormData, activeTab: string): void {
+function saveFormDraft(apiKey: string, formData: FormData, activeTab: string, selectedElement?: SelectedElement | null): void {
   try {
     const draft: DraftFormData = {
       formData,
       activeTab,
+      selectedElement,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(getFormDraftKey(apiKey), JSON.stringify(draft));
@@ -160,10 +163,11 @@ async function saveDraft(
   apiKey: string,
   formData: FormData,
   activeTab: string,
-  media: CapturedMedia[]
+  media: CapturedMedia[],
+  selectedElement?: SelectedElement | null
 ): Promise<void> {
   // Save form data to localStorage (fast, synchronous)
-  saveFormDraft(apiKey, formData, activeTab);
+  saveFormDraft(apiKey, formData, activeTab, selectedElement);
 
   // Save media to IndexedDB (can handle large data)
   if (media.length > 0) {
@@ -179,7 +183,7 @@ async function saveDraft(
  */
 async function loadDraft(
   apiKey: string
-): Promise<{ formData: FormData; activeTab: string; media: CapturedMedia[] } | null> {
+): Promise<{ formData: FormData; activeTab: string; media: CapturedMedia[]; selectedElement: SelectedElement | null } | null> {
   const formDraft = loadFormDraft(apiKey);
   const media = await loadMediaDraft(apiKey);
 
@@ -190,14 +194,19 @@ async function loadDraft(
 
   return {
     formData: formDraft?.formData || {
+      type: 'bug',
       title: '',
       description: '',
+      requestedChange: '',
+      expectedResult: '',
+      acceptanceCriteria: '',
       priority: 'medium',
       reporterEmail: '',
       reporterName: '',
     },
     activeTab: formDraft?.activeTab || 'details',
     media,
+    selectedElement: formDraft?.selectedElement ?? null,
   };
 }
 

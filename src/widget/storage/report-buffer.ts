@@ -1,6 +1,8 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { MediaItem } from '../api/submit.js';
 import { dataUrlToBlob, getExtensionFromDataUrl } from '../capture/screenshot.js';
+import type { SelectedElement } from '../capture/element-selection.js';
+import type { ReportType } from '@shared/types';
 
 const DB_NAME = 'bugpin-reports';
 const DB_VERSION = 2; // Bump version for schema change
@@ -17,7 +19,12 @@ interface PendingReport {
   apiKey: string;
   serverUrl: string;
   title: string;
+  type?: ReportType;
   description?: string;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   priority: string;
   reporterEmail?: string;
   reporterName?: string;
@@ -197,7 +204,12 @@ async function submitReport(report: PendingReport): Promise<boolean> {
       'data',
       JSON.stringify({
         title: report.title,
+        type: report.type,
         description: report.description,
+        requestedChange: report.requestedChange,
+        expectedResult: report.expectedResult,
+        acceptanceCriteria: report.acceptanceCriteria,
+        selectedElement: report.selectedElement,
         priority: report.priority,
         reporterEmail: report.reporterEmail,
         reporterName: report.reporterName,

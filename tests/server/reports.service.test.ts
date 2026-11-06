@@ -21,11 +21,25 @@ import type { EEHooks } from '../../src/server/types/ee-plugin';
 // Valid file buffers with correct magic bytes for validation
 const validPngBuffer = Buffer.from(
   '89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000000020001E221BC330000000049454E44AE426082',
-  'hex',
+  'hex'
 );
 const validMp4Buffer = Buffer.from([
-  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, // ftyp at offset 4
-  0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x18,
+  0x66,
+  0x74,
+  0x79,
+  0x70, // ftyp at offset 4
+  0x69,
+  0x73,
+  0x6f,
+  0x6d,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
 ]);
 
 const baseMetadata: ReportMetadata = {
@@ -186,7 +200,8 @@ beforeEach(() => {
 
   reportHistoryService.record = async () => undefined;
 
-  settingsCacheService.getAll = async () => ({ screenshot: { maxScreenshotSize: 10, useScreenCaptureAPI: false } } as AppSettings);
+  settingsCacheService.getAll = async () =>
+    ({ screenshot: { maxScreenshotSize: 10, useScreenCaptureAPI: false } }) as AppSettings;
 });
 
 afterEach(() => {
@@ -269,6 +284,70 @@ describe('reportsService.create', () => {
     expect(webhooksCreatedCalls).toBe(1);
     expect(notifyNewReportCalls).toBe(1);
     expect(notifyReporterSubmissionCalls).toBe(1);
+  });
+
+  it('normalizes development feedback and sanitizes selected element HTML', async () => {
+    const result = await reportsService.create({
+      apiKey: 'proj_key',
+      title: 'Improve checkout',
+      type: 'improvement',
+      requestedChange: '  Move the button  ',
+      expectedResult: '  Easier checkout  ',
+      acceptanceCriteria: '  Button is visible  ',
+      selectedElement: {
+        selector: '#checkout',
+        tagName: 'div',
+        id: 'token=abcdefghijklmnopqrstuvwxyz123456',
+        classes: ['primary'],
+        text: 'Checkout',
+        rect: { x: 1, y: 2, width: 100, height: 40 },
+        html: '<div id="safe" href="https://x.test/?token=secret" style="color:red" data-user="secret">Checkout token=abcdefghijklmnopqrstuvwxyz123456<!-- private --><script>alert(1)</script><input value="private"><textarea>secret</textarea><span data-bugpin-private>token</span><span hidden>hidden</span></div>',
+      },
+      metadata: baseMetadata,
+    });
+
+    expect(result.success).toBe(true);
+    expect(createdReportInput).toMatchObject({
+      type: 'improvement',
+      requestedChange: 'Move the button',
+      expectedResult: 'Easier checkout',
+      acceptanceCriteria: 'Button is visible',
+      selectedElement: {
+        text: 'Checkout',
+        id: 'token=[bugpin:redacted-token]',
+        html: '<div id="safe">Checkout token=[bugpin:redacted-token]</div>',
+      },
+    });
+  });
+
+  it('rejects invalid selected element bounds and oversized UTF-8 HTML', async () => {
+    const selectedElement = {
+      selector: '#x',
+      tagName: 'div',
+      classes: [],
+      text: '',
+      rect: { x: Number.NaN, y: 0, width: 1, height: 1 },
+      html: '<div></div>',
+    };
+    const invalidRect = await reportsService.create({
+      apiKey: 'proj_key',
+      title: 'Invalid element',
+      selectedElement,
+      metadata: baseMetadata,
+    });
+    expect(invalidRect.success).toBe(false);
+
+    const oversizedHtml = await reportsService.create({
+      apiKey: 'proj_key',
+      title: 'Large element',
+      selectedElement: {
+        ...selectedElement,
+        rect: { x: 0, y: 0, width: 1, height: 1 },
+        html: '€'.repeat(4000),
+      },
+      metadata: baseMetadata,
+    });
+    expect(oversizedHtml.success).toBe(false);
   });
 
   it('applies project default assignee when creating a report', async () => {
@@ -373,7 +452,7 @@ describe('reportsService.create', () => {
         reporterEmail: 'reporter@example.com',
         channel: 'email',
       },
-      'usr_1',
+      'usr_1'
     );
 
     expect(result.success).toBe(true);
@@ -402,7 +481,7 @@ describe('reportsService.create', () => {
         title: 'Manual report',
         assignedTo: 'usr_2',
       },
-      'usr_1',
+      'usr_1'
     );
 
     expect(result.success).toBe(false);
@@ -466,7 +545,7 @@ describe('reportsService.update', () => {
     const result = await reportsService.update(
       'rpt_1',
       { status: 'resolved', priority: 'high', assignedTo: 'usr_2' },
-      'usr_1',
+      'usr_1'
     );
     expect(result.success).toBe(true);
     expect(updatePayload).toMatchObject({ resolvedBy: 'usr_1' });

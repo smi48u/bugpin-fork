@@ -148,6 +148,11 @@ export async function initSchema(): Promise<void> {
       source TEXT DEFAULT 'widget' NOT NULL CHECK(source IN ('widget', 'manual')),
       title TEXT NOT NULL,
       description TEXT,
+      type TEXT DEFAULT 'bug' NOT NULL CHECK(type IN ('bug', 'ui', 'improvement', 'feature')),
+      requested_change TEXT,
+      expected_result TEXT,
+      acceptance_criteria TEXT,
+      selected_element JSON,
       status TEXT DEFAULT 'open' NOT NULL CHECK(status IN ('open', 'in_progress', 'resolved', 'closed')),
       priority TEXT DEFAULT 'medium' NOT NULL CHECK(priority IN ('lowest', 'low', 'medium', 'high', 'highest')),
       annotations JSON,
@@ -466,6 +471,36 @@ export async function runMigrations(): Promise<void> {
   for (const file of files) {
     if (!appliedNames.has(file)) {
       logger.info('Applying migration', { file });
+
+      if (file === '005_add_development_feedback.sql') {
+        const columns = new Set(
+          (db.query('PRAGMA table_info(reports)').all() as { name: string }[]).map(
+            (column) => column.name
+          )
+        );
+        const additions = [
+          ['type', `ALTER TABLE reports ADD COLUMN type TEXT NOT NULL DEFAULT 'bug'`],
+          ['requested_change', `ALTER TABLE reports ADD COLUMN requested_change TEXT`],
+          ['expected_result', `ALTER TABLE reports ADD COLUMN expected_result TEXT`],
+          ['acceptance_criteria', `ALTER TABLE reports ADD COLUMN acceptance_criteria TEXT`],
+          ['selected_element', `ALTER TABLE reports ADD COLUMN selected_element JSON`],
+        ] as const;
+
+        db.exec('BEGIN TRANSACTION');
+        try {
+          for (const [column, statement] of additions) {
+            if (!columns.has(column)) db.exec(statement);
+          }
+          db.run('INSERT INTO migrations (name) VALUES (?)', [file]);
+          db.exec('COMMIT');
+          logger.info('Migration applied successfully', { file });
+        } catch (error) {
+          db.exec('ROLLBACK');
+          logger.error('Migration failed', error, { file });
+          throw error;
+        }
+        continue;
+      }
 
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
 

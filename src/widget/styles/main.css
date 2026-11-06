@@ -208,4 +208,12 @@
   .priority-highest {
     color: #dc2626;
   }
+
+  /* MyMarg keeps its mobile tab bar at the bottom of the viewport. Keep the
+     feedback launcher above it, while preserving the configured desktop spot. */
+  @media (max-width: 900px) {
+    .bugpin-launcher-bottom {
+      bottom: calc(94px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+  }
 }

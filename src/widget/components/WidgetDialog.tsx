@@ -1,15 +1,21 @@
 import { FunctionComponent } from 'preact';
 import { useState, useCallback } from 'preact/hooks';
-import { FileText, Image, X } from 'lucide-preact';
+import { Crosshair, FileText, Image, X } from 'lucide-preact';
+import type { SelectedElement } from '../capture/element-selection.js';
 import { ScreenshotManager, CapturedMedia } from './ScreenshotManager.js';
 import { Button, Input, Textarea, Select, Label, Tabs } from './ui';
 import { ScreenCaptureConsentDialog } from './ScreenCaptureConsentDialog.js';
 import { useLocale } from '../hooks/use-locale.js';
 import { t } from '../i18n/index.js';
+import type { ReportType } from '@shared/types';
 
 export interface FormData {
+  type?: ReportType;
   title: string;
   description: string;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
   priority: 'lowest' | 'low' | 'medium' | 'high' | 'highest';
   reporterEmail: string;
   reporterName: string;
@@ -40,6 +46,10 @@ interface WidgetDialogProps {
   onReduceScreenshotQualityChange: (value: boolean) => void;
   oversizedCapture: { sizeMb: number; limitMb: number } | null;
   onDismissOversizedCapture: () => void;
+  selectedElement?: SelectedElement | null;
+  selectionError?: string | null;
+  onSelectElement?: () => void;
+  onClearSelectedElement?: () => void;
 }
 
 const TAB_ICONS = {
@@ -71,6 +81,10 @@ export const WidgetDialog: FunctionComponent<WidgetDialogProps> = ({
   onReduceScreenshotQualityChange,
   oversizedCapture,
   onDismissOversizedCapture,
+  selectedElement,
+  selectionError,
+  onSelectElement = () => undefined,
+  onClearSelectedElement = () => undefined,
 }) => {
   useLocale();
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -162,6 +176,13 @@ export const WidgetDialog: FunctionComponent<WidgetDialogProps> = ({
                   class="flex-auto min-h-0 overflow-y-auto p-6 flex flex-col gap-4"
                   onSubmit={handleSubmit}
                 >
+                  <div class="flex flex-col gap-1.5">
+                    <Label for="bugpin-type">Report type</Label>
+                    <Select id="bugpin-type" value={formData.type ?? 'bug'} onChange={(e) => handleInputChange('type', (e.target as HTMLSelectElement).value)}>
+                      <option value="bug">Bug</option><option value="ui">UI issue</option>
+                      <option value="improvement">Improvement</option><option value="feature">Feature</option>
+                    </Select>
+                  </div>
                   {/* Title */}
                   <div class="flex flex-col gap-1.5">
                     <Label for="bugpin-title-input" required>
@@ -186,9 +207,31 @@ export const WidgetDialog: FunctionComponent<WidgetDialogProps> = ({
                     )}
                   </div>
 
+                  <div class="flex flex-col gap-1.5">
+                    <Label for="bugpin-expected-result">{formData.type === 'bug' ? 'Expected result' : 'Desired outcome'}</Label>
+                    <Textarea id="bugpin-expected-result" value={formData.expectedResult ?? ''} onInput={(e) => handleInputChange('expectedResult', (e.target as HTMLTextAreaElement).value)} />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <Label for="bugpin-acceptance-criteria">Acceptance criteria</Label>
+                    <Textarea id="bugpin-acceptance-criteria" value={formData.acceptanceCriteria ?? ''} onInput={(e) => handleInputChange('acceptanceCriteria', (e.target as HTMLTextAreaElement).value)} />
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <Label>Page element (optional)</Label>
+                    {selectedElement && <details class="text-xs rounded border border-solid border-border p-2">
+                      <summary class="cursor-pointer"><code>{selectedElement.selector}</code></summary>
+                      <div class="mt-2">{selectedElement.tagName}{selectedElement.id ? `#${selectedElement.id}` : ''} · {Math.round(selectedElement.rect.x)}, {Math.round(selectedElement.rect.y)} · {Math.round(selectedElement.rect.width)}×{Math.round(selectedElement.rect.height)}</div>
+                      {selectedElement.text && <pre class="mt-2 whitespace-pre-wrap break-words max-h-24 overflow-auto">{selectedElement.text}</pre>}
+                      <pre class="mt-2 whitespace-pre-wrap break-all max-h-32 overflow-auto">{selectedElement.html}</pre>
+                      <button type="button" class="mt-2 underline" onClick={onClearSelectedElement}>Clear selected element</button>
+                    </details>}
+                    {selectionError && <span role="alert" class="text-destructive text-xs">{selectionError}</span>}
+                    <Button type="button" variant="outline" data-bugpin-select-element="true" onClick={onSelectElement}><Crosshair class="w-4 h-4" />{selectedElement ? 'Reselect element' : 'Select page element'}</Button>
+                  </div>
+
                   {/* Description */}
                   <div class="flex flex-col gap-1.5">
-                    <Label for="bugpin-description">{t('dialog.fields.description.label')}</Label>
+                    <Label for="bugpin-description">{(formData.type ?? 'bug') === 'bug' ? 'Steps to reproduce' : 'Requested change'}</Label>
                     <Textarea
                       id="bugpin-description"
                       placeholder={t('dialog.fields.description.placeholder')}

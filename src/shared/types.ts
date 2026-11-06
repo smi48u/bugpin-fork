@@ -26,15 +26,13 @@ export interface LauncherTextBundle {
 export type ReportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 export type ReportPriority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 export type ReportSource = 'widget' | 'manual';
+export type ReportType = 'bug' | 'ui' | 'improvement' | 'feature';
 
 /** URL/query value for filtering reports with no assignee */
 export const UNASSIGNED_FILTER = '__unassigned__';
 
 export type ReportHistoryAction =
-  | 'created'
-  | 'status_changed'
-  | 'priority_changed'
-  | 'assignee_changed';
+  'created' | 'status_changed' | 'priority_changed' | 'assignee_changed';
 export type ManualReportChannel = 'email' | 'chat' | 'phone' | 'qa' | 'other';
 export type UserRole = 'admin' | 'editor' | 'viewer';
 export type FileType = 'screenshot' | 'video' | 'attachment';
@@ -113,6 +111,21 @@ export interface StorageKeys {
   sessionStorage: string[];
 }
 
+export interface SelectedElement {
+  selector: string;
+  tagName: string;
+  id?: string;
+  classes: string[];
+  text: string;
+  rect: { x: number; y: number; width: number; height: number };
+  html: string;
+  componentHint?: string;
+  area?: string;
+  owner?: string;
+  screen?: string;
+  activeTab?: string;
+}
+
 export interface Report {
   id: string;
   projectId: string;
@@ -120,6 +133,11 @@ export interface Report {
   source: ReportSource;
   title: string;
   description?: string;
+  type?: ReportType;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   status: ReportStatus;
   priority: ReportPriority;
   annotations?: object;
@@ -381,6 +399,11 @@ export interface CreateReportRequest {
   apiKey: string;
   title: string;
   description?: string;
+  type?: ReportType;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   priority?: ReportPriority;
   screenshot: Blob | File;
   annotations?: object;
@@ -593,9 +616,7 @@ export interface SlackIntegrationConfig {
 }
 
 export type IntegrationConfig =
-  | GitHubIntegrationConfig
-  | JiraIntegrationConfig
-  | SlackIntegrationConfig;
+  GitHubIntegrationConfig | JiraIntegrationConfig | SlackIntegrationConfig;
 
 // Notification Types
 

@@ -4,7 +4,7 @@ import { Icon } from './Icon.js';
 import { cn } from '../lib/utils';
 import { useEffectiveTheme } from '../hooks/use-effective-theme.js';
 import { useLocale } from '../hooks/use-locale.js';
-import { getLocale, t } from '../i18n/index.js';
+import { getLocale } from '../i18n/index.js';
 import { resolveLauncherText } from '../i18n/resolve-launcher-text.js';
 import type { LauncherTextBundle } from '../config.js';
 
@@ -31,10 +31,10 @@ interface WidgetLauncherButtonProps {
 }
 
 const positionClasses: Record<string, string> = {
-  'bottom-right': 'bottom-5 right-5',
-  'bottom-left': 'bottom-5 left-5',
-  'top-right': 'top-5 right-5',
-  'top-left': 'top-5 left-5',
+  'bottom-right': 'bottom-4 right-4',
+  'bottom-left': 'bottom-4 left-4',
+  'top-right': 'top-4 right-4',
+  'top-left': 'top-4 left-4',
 };
 
 export const WidgetLauncherButton: FunctionComponent<WidgetLauncherButtonProps> = ({
@@ -69,6 +69,18 @@ export const WidgetLauncherButton: FunctionComponent<WidgetLauncherButtonProps> 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const effectiveTheme = useEffectiveTheme(theme);
   const isDarkMode = effectiveTheme === 'dark';
+  // Keep the public launcher configuration contract intact for future brand variants.
+  void [
+    lightButtonColor,
+    lightTextColor,
+    lightButtonHoverColor,
+    lightTextHoverColor,
+    darkButtonColor,
+    darkTextColor,
+    darkButtonHoverColor,
+    darkTextHoverColor,
+    isDarkMode,
+  ];
   const activeLocale = getLocale();
   const resolvedButtonText = resolveLauncherText(
     buttonText.project,
@@ -76,14 +88,7 @@ export const WidgetLauncherButton: FunctionComponent<WidgetLauncherButtonProps> 
     activeLocale,
     buttonText.builtin?.[activeLocale] ?? null
   );
-  const tooltipBuiltinForActive = tooltipText.builtin?.[activeLocale] ?? null;
-  const resolvedTooltipText =
-    resolveLauncherText(
-      tooltipText.project,
-      tooltipText.global,
-      activeLocale,
-      tooltipBuiltinForActive
-    ) ?? t('tooltip.launcher');
+  const feedbackTooltip = 'Feedback: błędy, poprawki i pomysły';
 
   // Calculate tooltip position to ensure 4px margin from window edges
   useEffect(() => {
@@ -122,61 +127,60 @@ export const WidgetLauncherButton: FunctionComponent<WidgetLauncherButtonProps> 
         });
       });
     }
-  }, [isHovered, resolvedTooltipText]);
+  }, [isHovered, feedbackTooltip]);
 
-  // Select colors based on theme and hover state
-  const buttonColor = isDarkMode
-    ? isHovered
-      ? darkButtonHoverColor
-      : darkButtonColor
-    : isHovered
-      ? lightButtonHoverColor
-      : lightButtonColor;
+  // This fork is embedded in MyMarg, so the launcher uses the dashboard accent
+  // instead of the generic BugPin project palette. Dialog colors remain configurable.
+  const buttonColor = isHovered ? '#2563eb' : '#3b82f6';
+  const textColor = '#ffffff';
+  const tooltipBgColor = '#0f172a';
+  const tooltipTextColor = '#f8fafc';
 
-  const textColor = isDarkMode
-    ? isHovered
-      ? darkTextHoverColor
-      : darkTextColor
-    : isHovered
-      ? lightTextHoverColor
-      : lightTextColor;
-
-  // Base colors for tooltip (always use non-hover colors)
-  const tooltipBgColor = isDarkMode ? darkButtonColor : lightButtonColor;
-  const tooltipTextColor = isDarkMode ? darkTextColor : lightTextColor;
-
-  const borderRadius = buttonShape === 'round' ? '50%' : '8px';
-  const ariaLabel = resolvedButtonText || t('aria.launcher');
-
-  // For round shape, padding scales with icon size (half the icon size)
-  const padding = buttonShape === 'round' ? `${buttonIconSize / 2}px` : '12px 20px';
+  const borderRadius = '50%';
+  const ariaLabel = resolvedButtonText
+    ? `Przekaż feedback: ${resolvedButtonText}`
+    : 'Przekaż feedback';
+  void [buttonShape, buttonIcon, tooltipEnabled, tooltipText];
 
   return (
-    <div class={cn('fixed z-[2147483647]', positionClasses[position])}>
+    <div
+      class={cn(
+        'bugpin-launcher fixed z-[2147483647]',
+        positionClasses[position],
+        position.startsWith('bottom') && 'bugpin-launcher-bottom'
+      )}
+    >
       <button
         ref={buttonRef}
         class={cn(
-          'relative flex items-center justify-center gap-2 border-none text-sm font-medium cursor-pointer shadow-lg transition-all duration-200',
+          'relative flex h-9 w-9 items-center justify-center border border-solid cursor-pointer transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
           enableHoverScaleEffect && 'hover:scale-110 hover:shadow-xl active:scale-105'
         )}
         style={{
           backgroundColor: buttonColor,
           color: textColor,
           borderRadius: borderRadius,
-          padding: padding,
+          padding: '0',
+          borderColor: 'rgba(147, 197, 253, 0.9)',
+          boxShadow: '0 10px 24px rgba(37, 99, 235, 0.28)',
+          fontFamily:
+            "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          letterSpacing: '0.01em',
         }}
         onClick={onClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         aria-label={ariaLabel}
       >
-        {buttonIcon && (
-          <Icon name={buttonIcon} size={buttonIconSize} strokeWidth={buttonIconStroke} />
-        )}
-        {resolvedButtonText && <span>{resolvedButtonText}</span>}
+        <Icon
+          name="message-square"
+          size={Math.min(buttonIconSize, 16)}
+          strokeWidth={buttonIconStroke}
+        />
+        <span class="sr-only">{ariaLabel}</span>
       </button>
 
-      {tooltipEnabled && resolvedTooltipText && isHovered && (
+      {isHovered && (
         <div
           ref={tooltipRef}
           class="absolute bottom-full mb-2 px-3 py-1.5 text-xs rounded whitespace-nowrap pointer-events-none z-[2147483647] animate-[bugpin-tooltip-fade-in_0.2s_ease-in-out_forwards] shadow-md"
@@ -188,7 +192,7 @@ export const WidgetLauncherButton: FunctionComponent<WidgetLauncherButtonProps> 
             transform: tooltipOffset.transform,
           }}
         >
-          {resolvedTooltipText}
+          {feedbackTooltip}
           <div
             class="absolute top-full border-4 border-solid border-transparent"
             style={{

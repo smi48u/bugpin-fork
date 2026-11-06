@@ -1,7 +1,8 @@
 import { PageContext } from '../capture/context.js';
 import { dataUrlToBlob, getExtensionFromDataUrl } from '../capture/screenshot.js';
 import { bufferReport, startAutoSync } from '../storage/report-buffer.js';
-import type { UserActivityCapturePolicy } from '@shared/types';
+import type { ReportType, UserActivityCapturePolicy } from '@shared/types';
+import type { SelectedElement } from '../capture/element-selection.js';
 
 // Start auto-sync on module load
 startAutoSync();
@@ -16,7 +17,12 @@ export interface SubmitReportInput {
   apiKey: string;
   serverUrl: string;
   title: string;
+  type?: ReportType;
   description?: string;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   priority: 'lowest' | 'low' | 'medium' | 'high' | 'highest';
   reporterEmail?: string;
   reporterName?: string;
@@ -70,7 +76,12 @@ export async function submitReport(input: SubmitReportInput): Promise<SubmitResp
       apiKey,
       serverUrl,
       title: data.title,
+      type: data.type,
       description: data.description,
+      requestedChange: data.requestedChange,
+      expectedResult: data.expectedResult,
+      acceptanceCriteria: data.acceptanceCriteria,
+      selectedElement: data.selectedElement,
       priority: data.priority,
       reporterEmail: data.reporterEmail,
       reporterName: data.reporterName,
@@ -96,7 +107,12 @@ export async function submitReport(input: SubmitReportInput): Promise<SubmitResp
     'data',
     JSON.stringify({
       title: data.title,
+      type: data.type,
       description: data.description,
+      requestedChange: data.requestedChange,
+      expectedResult: data.expectedResult,
+      acceptanceCriteria: data.acceptanceCriteria,
+      selectedElement: data.selectedElement,
       priority: data.priority,
       reporterEmail: data.reporterEmail,
       reporterName: data.reporterName,
@@ -151,8 +167,13 @@ export async function submitReport(input: SubmitReportInput): Promise<SubmitResp
       await bufferReport({
         apiKey,
         serverUrl,
-        title: data.title,
-        description: data.description,
+      title: data.title,
+      type: data.type,
+      description: data.description,
+      requestedChange: data.requestedChange,
+      expectedResult: data.expectedResult,
+      acceptanceCriteria: data.acceptanceCriteria,
+      selectedElement: data.selectedElement,
         priority: data.priority,
         reporterEmail: data.reporterEmail,
         reporterName: data.reporterName,

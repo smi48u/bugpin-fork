@@ -8,6 +8,8 @@ import type {
   ReportStatus,
   ReportPriority,
   ReportMetadata,
+  ReportType,
+  SelectedElement,
   GitHubSyncStatus,
   LocaleCode,
 } from '@shared/types';
@@ -22,6 +24,11 @@ interface ReportRow {
   source: 'widget' | 'manual';
   title: string;
   description: string | null;
+  type: ReportType | null;
+  requested_change: string | null;
+  expected_result: string | null;
+  acceptance_criteria: string | null;
+  selected_element: string | null;
   status: ReportStatus;
   priority: ReportPriority;
   annotations: string | null;
@@ -72,6 +79,13 @@ function mapRowToReport(row: ReportRow & { project_name?: string }): Report {
     source: row.source ?? 'widget',
     title: row.title,
     description: row.description ?? undefined,
+    type: row.type ?? 'bug',
+    requestedChange: row.requested_change ?? undefined,
+    expectedResult: row.expected_result ?? undefined,
+    acceptanceCriteria: row.acceptance_criteria ?? undefined,
+    selectedElement: row.selected_element
+      ? (JSON.parse(row.selected_element) as SelectedElement)
+      : undefined,
     status: row.status,
     priority: row.priority,
     annotations: row.annotations ? JSON.parse(row.annotations) : undefined,
@@ -113,16 +127,22 @@ export const reportsRepo = {
 
     db.run(
       `INSERT INTO reports (
-        id, project_id, source, title, description, status, priority,
+        id, project_id, source, title, description, type, requested_change, expected_result,
+        acceptance_criteria, selected_element, status, priority,
         annotations, metadata, reporter_email, reporter_name, reporter_locale, assigned_to,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.projectId,
         data.source ?? 'widget',
         data.title,
         data.description ?? null,
+        data.type ?? 'bug',
+        data.requestedChange ?? null,
+        data.expectedResult ?? null,
+        data.acceptanceCriteria ?? null,
+        data.selectedElement ? JSON.stringify(data.selectedElement) : null,
         'open',
         data.priority ?? 'medium',
         data.annotations ? JSON.stringify(data.annotations) : null,
@@ -280,6 +300,27 @@ export const reportsRepo = {
     if (updates.description !== undefined) {
       sets.push('description = ?');
       params.push(updates.description ?? null);
+    }
+
+    if (updates.type !== undefined) {
+      sets.push('type = ?');
+      params.push(updates.type);
+    }
+
+    for (const [key, column] of [
+      ['requestedChange', 'requested_change'],
+      ['expectedResult', 'expected_result'],
+      ['acceptanceCriteria', 'acceptance_criteria'],
+    ] as const) {
+      if (Object.prototype.hasOwnProperty.call(updates, key)) {
+        sets.push(`${column} = ?`);
+        params.push(updates[key] ?? null);
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'selectedElement')) {
+      sets.push('selected_element = ?');
+      params.push(updates.selectedElement ? JSON.stringify(updates.selectedElement) : null);
     }
 
     if (updates.status !== undefined) {

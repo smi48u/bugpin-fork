@@ -376,8 +376,27 @@ describe('reportsRepo', () => {
       projectId: project.id,
       title: 'Login crash',
       description: 'Crash on login',
+      type: 'feature',
+      requestedChange: 'Add passkeys',
+      expectedResult: 'Passwordless login',
+      acceptanceCriteria: 'Passkey completes sign-in',
+      selectedElement: {
+        selector: '#login',
+        tagName: 'form',
+        classes: ['login'],
+        text: 'Login',
+        rect: { x: 0, y: 0, width: 300, height: 200 },
+        html: '<form id="login"></form>',
+      },
       priority: 'medium',
       metadata: baseMetadata,
+    });
+    expect(report).toMatchObject({
+      type: 'feature',
+      requestedChange: 'Add passkeys',
+      expectedResult: 'Passwordless login',
+      acceptanceCriteria: 'Passkey completes sign-in',
+      selectedElement: { selector: '#login', tagName: 'form' },
     });
 
     const updated = await reportsRepo.update(report.id, {

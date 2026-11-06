@@ -12,6 +12,7 @@ import { syncQueueService } from './integrations/sync-queue.service.js';
 import { usersService } from './users.service.js';
 import { reportHistoryService } from './report-history.service.js';
 import { normalizeUrl } from '../utils/validators.js';
+import { sanitizeSelectedElement } from '../utils/selected-element.js';
 import type {
   Report,
   ReportFilter,
@@ -24,6 +25,8 @@ import type {
   FileType,
   FileRecord,
   LocaleCode,
+  ReportType,
+  SelectedElement,
 } from '@shared/types';
 
 // Types
@@ -38,6 +41,11 @@ export interface CreateReportInput {
   apiKey: string;
   title: string;
   description?: string;
+  type?: ReportType;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   priority?: ReportPriority;
   files?: MediaFile[];
   annotations?: object;
@@ -51,6 +59,11 @@ export interface CreateManualReportInput {
   projectId: string;
   title: string;
   description?: string;
+  type?: ReportType;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   priority?: ReportPriority;
   assignedTo?: string | null;
   reporterEmail?: string;
@@ -103,6 +116,53 @@ async function resolveDefaultAssignee(projectId: string, userId: string | null |
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+const DEVELOPMENT_TEXT_LIMIT = 5_000;
+
+function validateOptionalText(value: string | undefined, field: string): Result<void> {
+  if (value !== undefined && value.length > DEVELOPMENT_TEXT_LIMIT) {
+    return Result.fail(
+      `${field} must be at most ${DEVELOPMENT_TEXT_LIMIT} characters`,
+      'VALIDATION_ERROR'
+    );
+  }
+  return Result.ok(undefined);
+}
+
+function validateSelectedElement(element: SelectedElement | undefined): Result<void> {
+  if (!element) return Result.ok(undefined);
+  if (
+    element.selector.length > 2_000 ||
+    element.tagName.length > 100 ||
+    (element.id?.length ?? 0) > 500 ||
+    (element.componentHint?.length ?? 0) > 128 ||
+    (element.area?.length ?? 0) > 128 ||
+    (element.owner?.length ?? 0) > 128 ||
+    (element.screen?.length ?? 0) > 128 ||
+    (element.activeTab?.length ?? 0) > 128
+  ) {
+    return Result.fail('Selected element identifier is too long', 'VALIDATION_ERROR');
+  }
+  if (element.classes.length > 100 || element.classes.some((item) => item.length > 500)) {
+    return Result.fail('Selected element classes are too long', 'VALIDATION_ERROR');
+  }
+  if (element.text.length > 500) {
+    return Result.fail('Selected element text must be at most 500 characters', 'VALIDATION_ERROR');
+  }
+  if (Buffer.byteLength(element.html, 'utf8') > 10_240) {
+    return Result.fail(
+      'Selected element HTML must be at most 10240 UTF-8 bytes',
+      'VALIDATION_ERROR'
+    );
+  }
+  if (Object.values(element.rect).some((value) => !Number.isFinite(value))) {
+    return Result.fail(
+      'Selected element rectangle must contain finite numbers',
+      'VALIDATION_ERROR'
+    );
+  }
+  return Result.ok(undefined);
 }
 
 function normalizeOptionalUrl(value: string | undefined): string | undefined {
@@ -224,6 +284,11 @@ async function createForProject(
   input: {
     title: string;
     description?: string;
+    type?: ReportType;
+    requestedChange?: string;
+    expectedResult?: string;
+    acceptanceCriteria?: string;
+    selectedElement?: SelectedElement;
     priority?: ReportPriority;
     annotations?: object;
     metadata: ReportMetadata;
@@ -248,6 +313,18 @@ async function createForProject(
     return Result.fail('Title must be at most 200 characters', 'INVALID_TITLE');
   }
 
+  for (const [value, field] of [
+    [input.description, 'Description'],
+    [input.requestedChange, 'Requested change'],
+    [input.expectedResult, 'Expected result'],
+    [input.acceptanceCriteria, 'Acceptance criteria'],
+  ] as const) {
+    const validation = validateOptionalText(value, field);
+    if (!validation.success) return validation;
+  }
+  const elementValidation = validateSelectedElement(input.selectedElement);
+  if (!elementValidation.success) return elementValidation;
+
   let assignedTo: string | undefined;
   if (options.requestedAssignee === undefined) {
     assignedTo = await resolveDefaultAssignee(project.id, project.settings?.defaultAssigneeUserId);
@@ -265,11 +342,26 @@ async function createForProject(
     return fileValidation;
   }
 
+  const selectedElement = input.selectedElement
+    ? sanitizeSelectedElement(input.selectedElement)
+    : undefined;
+  if (selectedElement && Buffer.byteLength(selectedElement.html, 'utf8') > 10_240) {
+    return Result.fail(
+      'Sanitized selected element HTML exceeds 10240 UTF-8 bytes',
+      'VALIDATION_ERROR'
+    );
+  }
+
   const reportData: CreateReportData = {
     projectId: project.id,
     source: options.source,
     title: input.title.trim(),
     description: normalizeOptionalText(input.description),
+    type: input.type ?? 'bug',
+    requestedChange: normalizeOptionalText(input.requestedChange),
+    expectedResult: normalizeOptionalText(input.expectedResult),
+    acceptanceCriteria: normalizeOptionalText(input.acceptanceCriteria),
+    selectedElement,
     priority: input.priority ?? 'medium',
     assignedTo,
     annotations: input.annotations,
@@ -382,6 +474,11 @@ export const reportsService = {
       {
         title: input.title,
         description: input.description,
+        type: input.type,
+        requestedChange: input.requestedChange,
+        expectedResult: input.expectedResult,
+        acceptanceCriteria: input.acceptanceCriteria,
+        selectedElement: input.selectedElement,
         priority: input.priority,
         annotations: input.annotations,
         metadata: input.metadata,
@@ -423,6 +520,11 @@ export const reportsService = {
       {
         title: input.title,
         description: input.description,
+        type: input.type,
+        requestedChange: input.requestedChange,
+        expectedResult: input.expectedResult,
+        acceptanceCriteria: input.acceptanceCriteria,
+        selectedElement: input.selectedElement,
         priority: input.priority,
         metadata,
         reporterEmail: input.reporterEmail,

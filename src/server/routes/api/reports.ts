@@ -124,6 +124,11 @@ reports.post('/', authorize(['admin', 'editor']), async (c) => {
       projectId: validation.data.projectId,
       title: validation.data.title,
       description: validation.data.description,
+      type: validation.data.type,
+      requestedChange: validation.data.requestedChange,
+      expectedResult: validation.data.expectedResult,
+      acceptanceCriteria: validation.data.acceptanceCriteria,
+      selectedElement: validation.data.selectedElement,
       priority: validation.data.priority,
       assignedTo:
         validation.data.assignedTo === undefined ? undefined : validation.data.assignedTo || null,

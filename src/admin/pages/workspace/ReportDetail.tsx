@@ -65,6 +65,7 @@ import {
   type ExportSectionToggles,
 } from '../../lib/reportExport';
 import { CopySectionButton } from '../../components/report/CopySectionButton';
+import { ReportRequirements } from '../../components/report/ReportRequirements';
 import { ExportDiagnosticsMenu } from '../../components/report/ExportDiagnosticsMenu';
 import { ActivityDialog } from '../../components/report/ActivityDialog';
 import { useReportHistory } from '../../hooks/useReportHistory';
@@ -577,6 +578,8 @@ export function ReportDetail() {
               </p>
             </CardContent>
           </Card>
+
+          <ReportRequirements report={report} />
 
           {/* Console Output */}
           {consoleErrors.length > 0 && (

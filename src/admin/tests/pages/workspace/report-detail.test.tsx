@@ -176,4 +176,49 @@ describe('ReportDetail', () => {
     expect(screen.getByText('Manual Report')).toBeInTheDocument();
     expect(screen.queryByText('Environment')).not.toBeInTheDocument();
   });
+
+  it('renders report intent and selected element HTML as escaped text', async () => {
+    server.use(
+      http.get('/api/reports/:id', () =>
+        HttpResponse.json({
+          success: true,
+          report: {
+            ...mockReports[0],
+            type: 'ui',
+            requestedChange: 'Make the submit button keyboard accessible',
+            expectedResult: 'Enter submits the form',
+            acceptanceCriteria: 'Focus is visible and submission happens once',
+            selectedElement: {
+              selector: '#submit',
+              tagName: 'button',
+              id: 'submit',
+              classes: ['primary', 'wide'],
+              text: 'Submit',
+              rect: { x: 10, y: 20, width: 120, height: 40 },
+              html: '<button onclick="alert(1)">Submit</button>',
+            },
+          },
+          files: [],
+        })
+      )
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Routes>
+        <Route path="/reports/:id" element={<ReportDetail />} />
+      </Routes>,
+      { initialEntries: ['/reports/report-1'] }
+    );
+
+    expect(await screen.findByText('Report intent')).toBeInTheDocument();
+    expect(screen.getByText('ui')).toBeInTheDocument();
+    expect(screen.getByText('Make the submit button keyboard accessible')).toBeInTheDocument();
+    expect(screen.getByText('#submit')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /HTML snapshot/i }));
+    const html = screen.getByText('<button onclick="alert(1)">Submit</button>');
+    expect(html.tagName).toBe('PRE');
+    expect(html.closest('pre')?.querySelector('script')).toBeNull();
+  });
 });

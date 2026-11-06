@@ -1,5 +1,5 @@
 import { FunctionComponent } from 'preact';
-import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'preact/hooks';
 import { WidgetConfig } from '../config.js';
 import { WidgetLauncherButton } from './WidgetLauncherButton.js';
 import { WidgetDialog, FormData } from './WidgetDialog.js';
@@ -13,12 +13,17 @@ import { draftStorage } from '../storage/draft-storage.js';
 import { useEffectiveTheme } from '../hooks/use-effective-theme.js';
 import { useLocale } from '../hooks/use-locale.js';
 import { getLocale, t } from '../i18n/index.js';
+import { captureSelectedElement, canSelectElement, type SelectedElement } from '../capture/element-selection.js';
 
-type WidgetStep = 'closed' | 'form' | 'annotating';
+type WidgetStep = 'closed' | 'form' | 'annotating' | 'selecting';
 
 const INITIAL_FORM_DATA: FormData = {
+  type: 'bug',
   title: '',
   description: '',
+  requestedChange: '',
+  expectedResult: '',
+  acceptanceCriteria: '',
   priority: 'medium',
   reporterEmail: '',
   reporterName: '',
@@ -65,15 +70,75 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
     sizeMb: number;
     limitMb: number;
   } | null>(null);
+  const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const selectionFocusRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (step !== 'selecting') return;
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-bugpin-exclude', 'true');
+    overlay.setAttribute('aria-hidden', 'true');
+    Object.assign(overlay.style, { position: 'fixed', pointerEvents: 'none', zIndex: '2147483645', border: '2px solid #3b82f6', background: 'rgba(59,130,246,.12)', display: 'none' });
+    document.body.appendChild(overlay);
+    const hint = document.createElement('div');
+    hint.setAttribute('data-bugpin-exclude', 'true');
+    hint.textContent = 'Select an element to attach · Press Escape to cancel';
+    Object.assign(hint.style, { position: 'fixed', left: '50%', top: '16px', transform: 'translateX(-50%)', zIndex: '2147483646', padding: '8px 12px', borderRadius: '6px', color: '#fff', background: '#111827', font: '13px system-ui, sans-serif', pointerEvents: 'none' });
+    document.body.appendChild(hint);
+    const finish = () => {
+      setStep('form');
+      requestAnimationFrame(() => {
+        const fallback = containerRef.current?.querySelector<HTMLElement>('[data-bugpin-select-element]');
+        (selectionFocusRef.current?.isConnected ? selectionFocusRef.current : fallback)?.focus();
+      });
+    };
+    const move = (event: MouseEvent) => {
+      const target = event.target instanceof window.Element ? event.target : null;
+      if (!target || !canSelectElement(target)) { overlay.style.display = 'none'; return; }
+      const rect = target.getBoundingClientRect();
+      Object.assign(overlay.style, { display: 'block', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+    };
+    const click = (event: MouseEvent) => {
+      event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
+      const target = event.target instanceof window.Element ? event.target : null;
+      const captured = target ? captureSelectedElement(target) : null;
+      if (captured) { setSelectedElement(captured); setSelectionError(null); }
+      else setSelectionError('Could not capture this element. Try selecting its parent element.');
+      finish();
+    };
+    const suppressActivation = (event: Event) => { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); };
+    const hideOverlay = () => { overlay.style.display = 'none'; };
+    const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') { suppressActivation(event); finish(); } };
+    document.addEventListener('mousemove', move, true);
+    document.addEventListener('pointerdown', suppressActivation, true);
+    document.addEventListener('mousedown', suppressActivation, true);
+    document.addEventListener('click', click, true);
+    document.addEventListener('keydown', keydown, true);
+    window.addEventListener('scroll', hideOverlay, true);
+    window.addEventListener('resize', hideOverlay);
+    return () => {
+      overlay.remove();
+      hint.remove();
+      document.removeEventListener('mousemove', move, true);
+      document.removeEventListener('pointerdown', suppressActivation, true);
+      document.removeEventListener('mousedown', suppressActivation, true);
+      document.removeEventListener('click', click, true);
+      document.removeEventListener('keydown', keydown, true);
+      window.removeEventListener('scroll', hideOverlay, true);
+      window.removeEventListener('resize', hideOverlay);
+    };
+  }, [step]);
 
   // Load draft when widget opens
   useEffect(() => {
     if (step === 'form' && !draftLoaded) {
       draftStorage.load(config.apiKey).then((draft) => {
         if (draft) {
-          setFormData(draft.formData);
+          setFormData({ ...INITIAL_FORM_DATA, ...draft.formData });
           setActiveTab(draft.activeTab);
           setMedia(draft.media);
+          setSelectedElement(draft.selectedElement);
         }
         setDraftLoaded(true);
       });
@@ -132,9 +197,17 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
   const hasContent =
     formData.title.trim() ||
     formData.description.trim() ||
+    formData.expectedResult?.trim() ||
+    formData.acceptanceCriteria?.trim() ||
     formData.reporterEmail.trim() ||
     formData.reporterName.trim() ||
-    media.length > 0;
+    media.length > 0 || selectedElement !== null;
+
+  const handleSelectElement = useCallback(() => {
+    selectionFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectionError(null);
+    setStep('selecting');
+  }, []);
 
   const resetUserActivity = useCallback(() => {
     clearUserActivityFn();
@@ -155,13 +228,13 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
 
   // Close and keep draft
   const handleCloseKeepDraft = useCallback(() => {
-    draftStorage.save(config.apiKey, formData, activeTab, media);
+    draftStorage.save(config.apiKey, formData, activeTab, media, selectedElement);
     resetUserActivity();
     setShowCloseConfirm(false);
     setStep('closed');
     setAnnotatingMediaId(null);
     setDraftLoaded(false);
-  }, [config.apiKey, formData, activeTab, media, resetUserActivity]);
+  }, [config.apiKey, formData, activeTab, media, selectedElement, resetUserActivity]);
 
   // Close and discard draft
   const handleCloseDiscardDraft = useCallback(() => {
@@ -169,6 +242,7 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
     setMedia([]);
     setActiveTab('details');
     setFormData(INITIAL_FORM_DATA);
+    setSelectedElement(null);
     draftStorage.clear(config.apiKey);
     setShowCloseConfirm(false);
     setStep('closed');
@@ -185,6 +259,7 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
         setMedia([]);
         setActiveTab('details');
         setFormData(INITIAL_FORM_DATA);
+        setSelectedElement(null);
         draftStorage.clear(config.apiKey);
       }
       setShowCloseConfirm(false);
@@ -370,7 +445,12 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
           apiKey: config.apiKey,
           serverUrl: config.serverUrl,
           title: formData.title,
+          type: formData.type ?? 'bug',
           description: formData.description,
+          requestedChange: formData.description || undefined,
+          expectedResult: formData.expectedResult || undefined,
+          acceptanceCriteria: formData.acceptanceCriteria || undefined,
+          selectedElement: selectedElement || undefined,
           priority: formData.priority,
           reporterEmail: formData.reporterEmail || undefined,
           reporterName: formData.reporterName || undefined,
@@ -398,7 +478,7 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
         setIsSubmitting(false);
       }
     },
-    [config, handleCloseWidget, captureContextFn, submitReportFn]
+    [config, handleCloseWidget, captureContextFn, submitReportFn, selectedElement]
   );
 
   const handleToastClose = useCallback(() => {
@@ -411,7 +491,7 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
     : null;
 
   return (
-    <div ref={containerRef} class={`bugpin-container bugpin-theme-${effectiveTheme}`}>
+    <div ref={containerRef} data-bugpin-exclude="true" style={step === 'selecting' ? { display: 'none' } : undefined} class={`bugpin-container bugpin-theme-${effectiveTheme}`}>
       <WidgetLauncherButton
         position={config.position}
         buttonText={config.buttonText}
@@ -471,6 +551,10 @@ export const App: FunctionComponent<AppProps> = ({ config, deps }) => {
           onReduceScreenshotQualityChange={setReduceScreenshotQuality}
           oversizedCapture={oversizedCapture}
           onDismissOversizedCapture={() => setOversizedCapture(null)}
+          selectedElement={selectedElement}
+          selectionError={selectionError}
+          onSelectElement={handleSelectElement}
+          onClearSelectedElement={() => { setSelectedElement(null); setSelectionError(null); }}
         />
       )}
 

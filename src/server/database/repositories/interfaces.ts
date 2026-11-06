@@ -5,6 +5,8 @@ import type {
   ReportPriority,
   ReportMetadata,
   ReportSource,
+  ReportType,
+  SelectedElement,
   Project,
   ProjectSettings,
   User,
@@ -33,6 +35,11 @@ export interface CreateReportData {
   source?: ReportSource;
   title: string;
   description?: string;
+  type?: ReportType;
+  requestedChange?: string;
+  expectedResult?: string;
+  acceptanceCriteria?: string;
+  selectedElement?: SelectedElement;
   priority?: ReportPriority;
   assignedTo?: string;
   annotations?: object;

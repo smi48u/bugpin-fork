@@ -210,6 +210,8 @@ async function initFromScriptTag(scriptElement: HTMLScriptElement): Promise<void
   }
 
   const dataButtonText = scriptElement.getAttribute('data-button-text');
+  const launcherText =
+    dataButtonText === 'Zgłoś błąd' ? 'Dodaj feedback' : dataButtonText;
 
   // Merge configurations: defaults < API < data attributes
   const config: WidgetConfig = {
@@ -221,8 +223,8 @@ async function initFromScriptTag(scriptElement: HTMLScriptElement): Promise<void
     ...(scriptElement.getAttribute('data-position') && {
       position: scriptElement.getAttribute('data-position') as WidgetConfig['position'],
     }),
-    ...(dataButtonText && {
-      buttonText: { project: { en: dataButtonText }, global: null, builtin: null },
+    ...(launcherText && {
+      buttonText: { project: { en: launcherText }, global: null, builtin: null },
     }),
     ...(scriptElement.getAttribute('data-theme') && {
       theme: scriptElement.getAttribute('data-theme') as 'light' | 'dark',

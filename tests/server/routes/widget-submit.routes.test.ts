@@ -295,6 +295,21 @@ describe('widget routes', () => {
       expect(body.error).toBe('VALIDATION_ERROR');
     });
 
+    it('rejects an unknown development feedback type', async () => {
+      const app = createApp();
+      const res = await app.request('http://localhost/widget/submit', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'test_api_key_123',
+        },
+        body: JSON.stringify({ ...validSubmitBody, type: 'question' }),
+      });
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('VALIDATION_ERROR');
+    });
+
     it('creates report successfully', async () => {
       const app = createApp();
       const res = await app.request('http://localhost/widget/submit', {

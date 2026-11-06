@@ -2,6 +2,7 @@ import { logger } from '../../utils/logger.js';
 import { settingsRepo } from '../../database/repositories/settings.repo.js';
 import { readFile } from '../../storage/files.js';
 import type { Report, FileRecord } from '@shared/types';
+import { feedbackHeading, feedbackSections, feedbackTitle } from './github-feedback.js';
 
 const MAX_GITHUB_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -53,7 +54,28 @@ export async function createGitHubIssue(
     const body = await buildIssueBody(report, uploadResult);
 
     // Merge labels and assignees
-    const labels = [...(githubConfig.labels || []), ...(options?.labels || [])];
+    const labels = [...new Set([...(githubConfig.labels || []), ...(options?.labels || [])])];
+    // Type labels are best effort; do not create labels or retry issue creation.
+    if (report.type && !labels.includes(report.type)) {
+      try {
+        const labelResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/labels/${encodeURIComponent(report.type)}`,
+          {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              Authorization: `Bearer ${accessToken}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          }
+        );
+        if (labelResponse.ok) {
+          const label = (await labelResponse.json()) as { name?: string };
+          if (label.name === report.type) labels.push(report.type);
+        }
+      } catch {
+        // Missing permissions or unavailable lookup must not prevent forwarding.
+      }
+    }
     const assignees = [...(githubConfig.assignees || []), ...(options?.assignees || [])];
 
     // Create issue via GitHub API
@@ -66,7 +88,7 @@ export async function createGitHubIssue(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        title: report.title,
+        title: feedbackTitle(report),
         body,
         labels: labels.length > 0 ? labels : undefined,
         assignees: assignees.length > 0 ? assignees : undefined,
@@ -332,7 +354,7 @@ async function buildIssueBody(
     ? `${report.reporterName}${report.reporterEmail ? ` (${report.reporterEmail})` : ''}`
     : report.reporterEmail || null;
 
-  let body = `## Bug Report
+  let body = `## ${feedbackHeading(report)}
 
 **URL:** ${metadata.url || 'N/A'}
 ${metadata.title ? `**Page Title:** ${metadata.title}` : ''}
@@ -341,6 +363,7 @@ ${reporterInfo ? `**Reporter:** ${reporterInfo}` : ''}
 
 ### Description
 ${report.description || 'No description provided.'}
+${feedbackSections(report)}
 
 ### Environment
 | Property | Value |
@@ -752,7 +775,7 @@ export async function updateGitHubIssue(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: report.title,
+          title: feedbackTitle(report),
           body,
           state,
         }),

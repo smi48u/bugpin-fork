@@ -234,6 +234,44 @@ describe('App state transitions', () => {
     container.remove();
   });
 
+  it('selects a host element without triggering it and restores the form on Escape', async () => {
+    // @ts-expect-error - Query params in import for test isolation
+    const { App } = await import('../../components/App?element-selection');
+    const container = document.createElement('div');
+    const hostButton = document.createElement('button');
+    hostButton.id = 'host-action';
+    let hostClicks = 0;
+    hostButton.addEventListener('click', () => hostClicks++);
+    document.body.append(container, hostButton);
+    render(<App config={baseConfig} deps={appDeps} />, container);
+
+    container.querySelector<HTMLButtonElement>('button[aria-label="Report issue"]')?.click();
+    await flush();
+    const onSelectElement = lastDialogProps?.onSelectElement as () => void;
+    onSelectElement();
+    await flush();
+    await flush();
+    expect((container.querySelector('.bugpin-container') as HTMLElement).style.display).toBe('none');
+
+    const dispatched = hostButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await flush();
+    expect(dispatched).toBe(false);
+    expect(hostClicks).toBe(0);
+    expect((lastDialogProps?.selectedElement as { selector?: string })?.selector).toBe('#host-action');
+
+    (lastDialogProps?.onSelectElement as () => void)();
+    await flush();
+    await flush();
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await flush();
+    expect((container.querySelector('.bugpin-container') as HTMLElement).style.display).toBe('');
+    expect((lastDialogProps?.selectedElement as { selector?: string })?.selector).toBe('#host-action');
+
+    render(null, container);
+    container.remove();
+    hostButton.remove();
+  });
+
   it('shows a toast when screenshot capture fails', async () => {
     captureScreenshot.mockImplementationOnce(async () => {
       throw new Error('capture failed');

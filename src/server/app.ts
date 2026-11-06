@@ -258,7 +258,7 @@ export function createApp(): Hono {
         return new Response(file, {
           headers: {
             'Content-Type': 'application/javascript',
-            'Cache-Control': 'public, max-age=3600', // 1 hour
+            'Cache-Control': 'no-cache', // Always revalidate so host pages receive the current widget
             'Access-Control-Allow-Origin': '*', // Allow widget to be loaded from any domain
             'Cross-Origin-Resource-Policy': 'cross-origin',
           },

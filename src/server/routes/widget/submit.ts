@@ -17,6 +17,28 @@ const widget = new Hono();
 const MAX_DISPLAY_LENGTH = 128;
 const CONTROL_CHARS_PATTERN = /[\x00-\x1F\x7F]/g;
 
+const selectedElementSchema = z.object({
+  selector: z.string().max(2000),
+  tagName: z.string().max(100),
+  id: z.string().max(500).optional(),
+  classes: z.array(z.string().max(500)).max(100),
+  text: z.string().max(500),
+  rect: z.object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite(),
+    height: z.number().finite(),
+  }),
+  html: z.string().refine((value) => Buffer.byteLength(value, 'utf8') <= 10_240, {
+    message: 'HTML must be at most 10240 UTF-8 bytes',
+  }),
+  componentHint: z.string().max(128).optional(),
+  area: z.string().max(128).optional(),
+  owner: z.string().max(128).optional(),
+  screen: z.string().max(128).optional(),
+  activeTab: z.string().max(128).optional(),
+});
+
 function sanitizeForDisplay(value: string): string {
   return value.replace(CONTROL_CHARS_PATTERN, '').slice(0, MAX_DISPLAY_LENGTH);
 }
@@ -26,6 +48,11 @@ function sanitizeForDisplay(value: string): string {
 const submitReportSchema = z.object({
   title: z.string().min(4, 'Title must be at least 4 characters').max(200),
   description: z.string().optional(),
+  type: z.enum(['bug', 'ui', 'improvement', 'feature']).optional(),
+  requestedChange: z.string().max(5000).optional(),
+  expectedResult: z.string().max(5000).optional(),
+  acceptanceCriteria: z.string().max(5000).optional(),
+  selectedElement: selectedElementSchema.optional(),
   priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']).default('medium'),
   reporterName: z.string().optional(),
   reporterEmail: z.string().email().optional().or(z.literal('')),
@@ -299,6 +326,11 @@ widget.post('/submit', dynamicRateLimiter({ keyGenerator: apiKeyGenerator }), as
     apiKey,
     title: data.title,
     description: data.description,
+    type: data.type,
+    requestedChange: data.requestedChange,
+    expectedResult: data.expectedResult,
+    acceptanceCriteria: data.acceptanceCriteria,
+    selectedElement: data.selectedElement,
     priority: data.priority,
     files: media,
     annotations: data.annotations as object,
